@@ -8,12 +8,16 @@ from app.routers import students
 from app.config import settings
 from app.utils.exceptions import AppException
 
+from app.models.users import User  # Add alongside your other model imports
+from app.routers import students, auth  # Include auth import
+
 # 1. Initialize DB tables on startup
 Base.metadata.create_all(bind=engine)
 
 # 2. Single unified FastAPI instance
 app = FastAPI(title="Student Manager API")
 
+app.include_router(auth.router)  # Register Auth Routes
 # 3. Include Routers
 app.include_router(students.router)
 
