@@ -1,87 +1,98 @@
-# app/routers/books.py
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+# app/routers/students.py
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from typing import Optional, List
+from typing import List, Optional
+
 from app.database import get_db
 from app.models.students import Student
 from app.schemas.students import StudentCreate, StudentUpdate, StudentPatch, StudentResponse
+from app.utils.exceptions import NotFoundException, DuplicateException, BadRequestException
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
-def get_student_or_404(db: Session, student_id: int) -> Student:
-    """Helper: fetch a student or raise 404."""
+def get_student_or_404(student_id: int, db: Session) -> Student:
+    """Helper function to fetch resource or trigger custom 404."""
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+        raise NotFoundException(resource="Student", resource_id=student_id)
     return student
 
-# ── CREATE ──
-@router.post("", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
-def create_student(student: StudentCreate, db: Session = Depends(get_db)):
-    """Create a new student."""
-    db_student = Student(**student.model_dump())
-    try:
-        db.add(db_student)
-        db.commit()
-        db.refresh(db_student)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A student with this email already exists")
-    return db_student
+@router.post("/", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
+def create_student(payload: StudentCreate, db: Session = Depends(get_db)):
+    # 1. Duplicate email handling
+    existing = db.query(Student).filter(Student.email == payload.email).first()
+    if existing:
+        raise DuplicateException(resource="Student", field="email", value=payload.email)
+    
+    new_student = Student(**payload.model_dump())
+    db.add(new_student)
+    db.commit()
+    db.refresh(new_student)
+    return new_student
 
-# ── READ (many) ──
-@router.get("", response_model=List[StudentResponse])
-def list_students(
-    name: Optional[str] = Query(None),
-    email: Optional[str] = Query(None),
-    grade_level: Optional[int] = Query(None),
+@router.get("/", response_model=List[StudentResponse])
+def get_students(
+    grade_level: Optional[int] = None, 
+    is_enrolled: Optional[bool] = None, 
     db: Session = Depends(get_db)
 ):
-    """List students with optional filters."""
+    # 2. Get with filters
     query = db.query(Student)
-    if name:
-        query = query.filter(Student.name.ilike(f"%{name}%"))
-    if email:
-        query = query.filter(Student.email.ilike(f"%{email}%"))
     if grade_level is not None:
         query = query.filter(Student.grade_level == grade_level)
+    if is_enrolled is not None:
+        query = query.filter(Student.is_enrolled == is_enrolled)
     return query.all()
 
-# ── READ (one) ──
-@router.get("/{student_id}", response_model=StudentResponse)
-def get_student(student_id: int, db: Session = Depends(get_db)):
-    """Get a specific student by ID."""
-    return get_student_or_404(db, student_id)
+@router.get("/{id}", response_model=StudentResponse)
+def get_student(id: int, db: Session = Depends(get_db)):
+    # 3. Get specific student with 404 handling helper
+    return get_student_or_404(id, db)
 
-# ── UPDATE (PUT) ──
-@router.put("/{student_id}", response_model=StudentResponse)
-def update_student(student_id: int, student_data: StudentUpdate, db: Session = Depends(get_db)):
-    """Fully replace a student's data."""
-    db_student = get_student_or_404(db, student_id)
-    for field, value in student_data.model_dump().items():
-        setattr(db_student, field, value)
+@router.put("/{id}", response_model=StudentResponse)
+def update_student(id: int, payload: StudentUpdate, db: Session = Depends(get_db)):
+    # 4. Full replacement
+    student = get_student_or_404(id, db)
+    
+    if student.email != payload.email:
+        existing = db.query(Student).filter(Student.email == payload.email).first()
+        if existing:
+            raise DuplicateException(resource="Student", field="email", value=payload.email)
+            
+    for key, value in payload.model_dump().items():
+        setattr(student, key, value)
+        
     db.commit()
-    db.refresh(db_student)
-    return db_student
+    db.refresh(student)
+    return student
 
-# ── UPDATE (PATCH) ──
-@router.patch("/{student_id}", response_model=StudentResponse)
-def patch_student(student_id: int, student_data: StudentPatch, db: Session = Depends(get_db)):
-    """Partially update a student."""
-    db_student = get_student_or_404(db, student_id)
-    update_data = student_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_student, field, value)
+@router.patch("/{id}", response_model=StudentResponse)
+def patch_student(id: int, payload: StudentPatch, db: Session = Depends(get_db)):
+    # 5. Partial update
+    student = get_student_or_404(id, db)
+    
+    data = payload.model_dump(exclude_unset=True)
+    if "email" in data and data["email"] != student.email:
+        existing = db.query(Student).filter(Student.email == data["email"]).first()
+        if existing:
+            raise DuplicateException(resource="Student", field="email", value=data["email"])
+            
+    for key, value in data.items():
+        setattr(student, key, value)
+        
     db.commit()
-    db.refresh(db_student)
-    return db_student
+    db.refresh(student)
+    return student
 
-# ── DELETE ──
-@router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_student(student_id: int, db: Session = Depends(get_db)):
-    """Delete a student."""
-    db_student = get_student_or_404(db, student_id)
-    db.delete(db_student)
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_student(id: int, db: Session = Depends(get_db)):
+    # 6. Delete endpoint with business rule exception
+    student = get_student_or_404(id, db)
+    
+    # Custom rule: active students cannot be deleted
+    if student.is_enrolled:
+        raise BadRequestException(detail="Cannot delete an actively enrolled student. Unenroll them first.")
+        
+    db.delete(student)
     db.commit()
     return None

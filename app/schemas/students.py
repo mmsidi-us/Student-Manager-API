@@ -1,28 +1,26 @@
-# app/schemas/book.py
-from pydantic import BaseModel, Field, EmailStr
+# app/schemas/students.py
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
 class StudentBase(BaseModel):
-    name: str 
-    email: EmailStr  # Automatically validates proper email formats
-    grade_level: Optional[int] = Field(default=None, ge=1, le=12)  # Fixed: numeric limits
-    gpa: Optional[float] = Field(default=None, ge=0.0, le=4.0)
-    is_enrolled: bool = Field(default=True)
+    name: str
+    email: EmailStr
+    grade_level: int = Field(..., ge=1, le=12, description="Grade level must be between 1 and 12")
+    gpa: Optional[float] = Field(None, ge=0.0, le=4.0)
+    is_enrolled: bool = True
 
 class StudentCreate(StudentBase):
     pass
 
 class StudentUpdate(StudentBase):
-    """Full update — all fields required."""
-    pass
+    pass  # Full resource replacement 
 
 class StudentPatch(BaseModel):
-    """Partial update — all fields optional."""
     name: Optional[str] = None
     email: Optional[EmailStr] = None
-    grade_level: Optional[int] = Field(default=None, ge=1, le=12)
-    gpa: Optional[float] = Field(default=None, ge=0.0, le=4.0)
+    grade_level: Optional[int] = Field(None, ge=1, le=12)
+    gpa: Optional[float] = Field(None, ge=0.0, le=4.0)
     is_enrolled: Optional[bool] = None
 
 class StudentResponse(StudentBase):
