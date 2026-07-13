@@ -1,5 +1,5 @@
 # app/routers/students.py
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -7,6 +7,11 @@ from app.database import get_db
 from app.models.students import Student
 from app.schemas.students import StudentCreate, StudentUpdate, StudentPatch, StudentResponse
 from app.utils.exceptions import NotFoundException, DuplicateException, BadRequestException
+from app.utils.security import get_current_user
+from app.models.users import User
+# Import the new background utilities
+from app.utils.notifications import log_activity, send_notification
+
 
 # app/routers/students.py (Partial Update - showcasing dependency placements)
 from app.utils.security import get_current_user
@@ -21,10 +26,14 @@ def get_student_or_404(student_id: int, db: Session) -> Student:
         raise NotFoundException(resource="Student", resource_id=student_id)
     return student
 
-# 2. POST STUDENT (Protected)
+# --- Protected POST Endpoint ---
 @router.post("/", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
-def create_student(payload: StudentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Code execution only happens if token checks out    # 1. Duplicate email handling
+def create_student(
+    payload: StudentCreate, 
+    background_tasks: BackgroundTasks,  # Inject BackgroundTasks dependency
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
     existing = db.query(Student).filter(Student.email == payload.email).first()
     if existing:
         raise DuplicateException(resource="Student", field="email", value=payload.email)
@@ -33,6 +42,19 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db), curren
     db.add(new_student)
     db.commit()
     db.refresh(new_student)
+    
+    # Enqueue tasks to run immediately AFTER the HTTP response is dispatched
+    background_tasks.add_task(
+        log_activity, 
+        user_id=current_user.id, 
+        action=f"Created student record for '{new_student.name}' (ID: {new_student.id})"
+    )
+    background_tasks.add_task(
+        send_notification, 
+        email=new_student.email, 
+        message=f"Welcome {new_student.name}! Your student record has been successfully created."
+    )
+    
     return new_student
 
 # 1. GET ALL STUDENTS (Keep Public)
@@ -89,16 +111,30 @@ def patch_student(id: int, payload: StudentPatch, db: Session = Depends(get_db),
 
 # @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 # def delete_student(id: int, db: Session = Depends(get_db)):
-# 4. DELETE STUDENT (Protected)
+# --- Protected DELETE Endpoint ---
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_student(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # 6. Delete endpoint with business rule exception
-    student = get_student_or_404(id, db)
-    
-    # Custom rule: active students cannot be deleted
-    if student.is_enrolled:
-        raise BadRequestException(detail="Cannot delete an actively enrolled student. Unenroll them first.")
+def delete_student(
+    id: int, 
+    background_tasks: BackgroundTasks,  # Inject BackgroundTasks dependency
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    student = db.query(Student).filter(Student.id == id).first()
+    if not student:
+        raise NotFoundException(resource="Student", resource_id=id)
         
+    if student.is_enrolled:
+        raise AppException(detail="Cannot delete an actively enrolled student. Unenroll them first.", status_code=400)
+        
+    student_name = student.name  # Cache the name string before removing from DB
     db.delete(student)
     db.commit()
+    
+    # Enqueue logging task in the background
+    background_tasks.add_task(
+        log_activity, 
+        user_id=current_user.id, 
+        action=f"Deleted student record for '{student_name}' (ID: {id})"
+    )
+    
     return None

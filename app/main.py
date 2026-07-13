@@ -2,6 +2,8 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from app.database import engine, Base 
+from app.models import students, users
 
 from app.database import engine, Base
 from app.routers import students
