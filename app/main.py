@@ -1,33 +1,79 @@
 # app/main.py
+"""
+================================================================================
+🔒 STUDENT-MANAGER-API SECURITY HARDENING SUMMARY
+================================================================================
+The following security layers are active within this application:
+
+1. CORS Policy Enforcement:
+   - Restricts cross-origin requests specifically to local developer instances:
+     * Streamlit frontend (http://localhost:8501)
+     * React frontend (http://localhost:3000)
+   - Restricts HTTP methods strictly to: GET, POST, PUT, PATCH, DELETE.
+
+2. Rate Limiting (slowapi):
+   - Prevents brute-force and Denial-of-Service (DoS) attacks using client IP limits:
+     * Authentication (/auth/login) capped at 5 requests/minute.
+     * Record Creation (POST /students) capped at 20 requests/minute.
+     * General Directory Exploration (GET) capped at 60 requests/minute.
+
+3. Strict Payload Validation (Pydantic Constraints):
+   - Mitigates buffer-overflow and SQL/NoSQL injections.
+   - Restricts string fields with 'max_length' and numeric values with 'ge' and 'le'.
+
+4. Secure Password Hashing:
+   - Utilizes bcrypt (via PassLib) with a manual 72-byte truncation boundary.
+================================================================================
+"""
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from app.database import engine, Base 
-from app.models import students, users
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.database import engine, Base
-from app.routers import students
-from app.config import settings
-from app.utils.exceptions import AppException
+from app.models import students, users
+from app.routers import students as students_router, auth as auth_router
 
-from app.models.users import User  # Add alongside your other model imports
-from app.routers import students, auth  # Include auth import
+from app.utils.limiter import limiter
 
-# 1. Initialize DB tables on startup
-Base.metadata.create_all(bind=engine)
+# 1. Initialize Rate Limiter
 
-# 2. Single unified FastAPI instance
 app = FastAPI(title="Student Manager API")
 
-app.include_router(auth.router)  # Register Auth Routes
-# 3. Include Routers
-app.include_router(students.router)
+# Link SlowAPI's exception handler to FastAPI
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# 2. Configure CORS Middleware
+allowed_origins = [
+    "http://localhost:8501",  # Streamlit
+    "http://localhost:3000",  # React
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],  # Restrict to used methods
+    allow_headers=["*"],
+)
+
+# Initialize Database Tables
+Base.metadata.create_all(bind=engine)
+
+# Include Routers
+app.include_router(auth_router.router)
+app.include_router(students_router.router)
 
 @app.get("/")
 def root():
-    return {"app": settings.app_name, "docs": "/docs"}
+    return {"message": "Secured Student Manager API is online!"}
 
 # --- Global Exception Handlers ---
+from app.utils.exceptions import AppException
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException):

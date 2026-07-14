@@ -1,7 +1,8 @@
 # app/routers/students.py
-from fastapi import APIRouter, Depends, status, BackgroundTasks
+from fastapi import APIRouter, Depends, status, BackgroundTasks, Request # Import Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from app.utils.limiter import limiter  #
 
 from app.database import get_db
 from app.models.students import Student
@@ -28,7 +29,9 @@ def get_student_or_404(student_id: int, db: Session) -> Student:
 
 # --- Protected POST Endpoint ---
 @router.post("/", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")
 def create_student(
+    request: Request,
     payload: StudentCreate, 
     background_tasks: BackgroundTasks,  # Inject BackgroundTasks dependency
     db: Session = Depends(get_db), 
@@ -59,7 +62,8 @@ def create_student(
 
 # 1. GET ALL STUDENTS (Keep Public)
 @router.get("/", response_model=List[StudentResponse])
-def get_students(grade_level: Optional[int] = None, is_enrolled: Optional[bool] = None, db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+def get_students(request: Request,grade_level: Optional[int] = None, is_enrolled: Optional[bool] = None, db: Session = Depends(get_db)):
     # Same code remains completely accessible to anyone...
     # 2. Get with filters
     query = db.query(Student)
