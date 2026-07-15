@@ -1,0 +1,6 @@
+[2026-07-14 20:26:56] Sent to sidi@example.com: Welcome Sidi Mohamed! Your student record has been successfully created.
+[2026-07-14 20:30:40] Sent to sidi@example.com: Welcome Sidi Mohamed! Your student record has been successfully created.
+[2026-07-14 20:32:59] Sent to sidi@example.com: Welcome Sidi Mohamed! Your student record has been successfully created.
+[2026-07-14 20:36:54] Sent to sidi@example.com: Welcome Sidi Mohamed! Your student record has been successfully created.
+[2026-07-14 20:38:59] Sent to sidi@example.com: Welcome Sidi Mohamed! Your student record has been successfully created.
+[2026-07-14 20:42:57] Sent to sidi@example.com: Welcome Sidi Mohamed! Your student record has been successfully created.

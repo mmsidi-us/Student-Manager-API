@@ -63,7 +63,8 @@ def create_student(
 # 1. GET ALL STUDENTS (Keep Public)
 @router.get("/", response_model=List[StudentResponse])
 @limiter.limit("60/minute")
-def get_students(request: Request,grade_level: Optional[int] = None, is_enrolled: Optional[bool] = None, db: Session = Depends(get_db)):
+def get_students(request: Request,grade_level: Optional[int] = None, is_enrolled: Optional[bool] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user) # 👈 This must be on every protected endpoint!
+                 ):
     # Same code remains completely accessible to anyone...
     # 2. Get with filters
     query = db.query(Student)

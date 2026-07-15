@@ -2,6 +2,7 @@
 # app/schemas/students.py
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
+from pydantic import ConfigDict
 
 class StudentBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=50, description="Student's full name")
@@ -23,8 +24,9 @@ class StudentPatch(BaseModel):
     gpa: Optional[float] = Field(None, ge=0.0, le=4.0)
     is_enrolled: Optional[bool] = None
 
+
+
+
 class StudentResponse(StudentBase):
     id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

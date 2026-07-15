@@ -1,6 +1,7 @@
 # app/schemas/auth.py
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
+from pydantic import BaseModel, ConfigDict
 
 class RegisterRequest(BaseModel):
     username: str
@@ -21,5 +22,4 @@ class UserResponse(BaseModel):
     email: EmailStr
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
