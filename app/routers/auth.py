@@ -10,9 +10,9 @@ from app.schemas.auth import RegisterRequest, TokenResponse, UserResponse
 from app.utils.exceptions import DuplicateException, AppException
 from app.utils.security import hash_password, verify_password, create_access_token, get_current_user
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter()
 
-@router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     # Check for existing username or email
     if db.query(User).filter(User.username == payload.username).first():

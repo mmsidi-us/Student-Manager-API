@@ -37,9 +37,36 @@ from app.routers import students as students_router, auth as auth_router
 
 from app.utils.limiter import limiter
 
-# 1. Initialize Rate Limiter
+# 1. Define tag metadata for grouping
+tags_metadata = [
+    {
+        "name": "Students",
+        "description": "Operations to manage student records including creation, retrieval, updates, and deletion.",
+    },
+    {
+        "name": "Authentication",
+        "description": "Identity verification, token generation, and securing endpoints via JWT.",
+    },
+]
+# 2. Initialize FastAPI with professional metadata
+app = FastAPI(
+    title="Student Database API",
+    description="""
+    A high-performance, professional **FastAPI** backend for managing student enrollment, academic standings, and grade details.
+    
+    ### Key Features:
+    * **Robust Security:** Endpoints are secured using **JWT (OAuth2)** Bearer tokens.
+    * **Strict Validation:** GPA and grade levels are automatically validated using strict **Pydantic** schemas.
+    * **Safe Deletions:** Business logic prevents deleting actively enrolled students to ensure data integrity.
+    
+    _Designed and built following industrial-grade API design patterns._
+    """,
+    version="1.0.0",
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
-app = FastAPI(title="Student Manager API")
 
 # Link SlowAPI's exception handler to FastAPI
 app.state.limiter = limiter
@@ -63,8 +90,8 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 # Include Routers
-app.include_router(auth_router.router)
-app.include_router(students_router.router)
+app.include_router(auth_router.router, prefix="/auth", tags=["Authentication"])
+app.include_router(students_router.router, prefix="/students", tags=["Students"])
 
 @app.get("/")
 def root():
